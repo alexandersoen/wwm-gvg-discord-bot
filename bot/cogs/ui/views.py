@@ -32,13 +32,17 @@ class RolePersistenceView(discord.ui.View):
     self.add_item(self.dropdown)
 
   async def select_callback(self, interaction: discord.Interaction):
-    self.role_ids = [int(val) for val in self.dropdown.values]
+    # Turn off save until loaded
+    self.save.disabled = True
+    await interaction.response.edit_message(view=self)
 
     # Ensure UI shows selected
+    self.role_ids = [int(val) for val in self.dropdown.values]
     for option in self.dropdown.options:
       option.default = int(option.value) in self.role_ids
 
-    await interaction.response.edit_message(view=self)
+    self.save.disabled = False
+    await interaction.edit_original_response(view=self)
 
   @discord.ui.button(label="Save", style=discord.ButtonStyle.success)
   async def save(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -47,8 +51,7 @@ class RolePersistenceView(discord.ui.View):
 
     # If the message is already gone, just ignore it
     try:
-      await interaction.response.defer()  # Acknowledge the click
-      await interaction.delete_original_response()
+      await interaction.response.edit_message(content="Saving...", view=None)
     except discord.NotFound:
       pass
 
@@ -65,9 +68,7 @@ class ReactionSetupView(discord.ui.View):
 
     #  Extract reactions
     for reaction in refreshed_msg.reactions:
-      print(reaction)
       self.result.add(str(reaction.emoji))
-      break
 
     # Delete the temporary canvas message
     await self.canvas_msg.delete()
