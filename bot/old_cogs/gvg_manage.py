@@ -6,6 +6,7 @@ from .ui.role_views import RolePersistenceView
 
 
 class GvGManage(commands.Cog):
+  # TODO: Allow configuration?
   # SIGN_UP_REACT = discord.PartialEmoji.from_str("❤️")
   SIGN_UP_REACT = "❤️"
 

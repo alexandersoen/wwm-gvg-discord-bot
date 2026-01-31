@@ -1,5 +1,5 @@
 [project]
-name = "discord-bot"
+name = "wwm-gvg-discord-bot"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -7,4 +7,5 @@ requires-python = ">=3.11"
 dependencies = [
     "discord-py>=2.4.0",
     "python-dotenv>=1.2.1",
+    "sqlmodel>=0.0.31",
 ]

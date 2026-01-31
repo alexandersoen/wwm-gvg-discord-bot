@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 
 from bot.client import Bot
+from core.database import init_db
 
 # Configure env
 load_dotenv()
@@ -11,6 +12,7 @@ if TOKEN is None:
   raise ValueError("Discord token not found in environment variable `DISCORD_TOKEN`.")
 
 if __name__ == "__main__":
-  # Configure bot
+  init_db()
+
   bot = Bot()
   bot.run(TOKEN)
