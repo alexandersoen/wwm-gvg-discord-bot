@@ -23,7 +23,7 @@ class SignupConfig(SQLModel, table=True):
     default=1, primary_key=True, sa_column_args=[CheckConstraint("id = 1")]
   )
 
-  admin_channel: ChannelConfig | None = Field(
+  management_channel: ChannelConfig | None = Field(
     default=None, sa_column=Column(PydanticJSON(ChannelConfig))
   )
   selected_post: MessageConfig | None = Field(

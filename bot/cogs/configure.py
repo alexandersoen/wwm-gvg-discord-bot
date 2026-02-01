@@ -13,11 +13,13 @@ async def get_gvg_status_str(signup_config: SignupConfig) -> str:
   # Report
   lines = ["## 🛡️ GvG Configuration Summary"]
 
-  # Format Admin Channel
-  if signup_config.admin_channel:
-    lines.append(f"**Admin Channel:** <#{signup_config.admin_channel.channel_id}>")
+  # Format Management Channel
+  if signup_config.management_channel:
+    lines.append(
+      f"**Management Channel:** <#{signup_config.management_channel.channel_id}>"
+    )
   else:
-    lines.append("**Admin Channel:** ⚠️ Not set")
+    lines.append("**Management Channel:** ⚠️ Not set")
 
   # Format Tracking Post
   if signup_config.selected_post:
@@ -48,14 +50,14 @@ class Configure(commands.Cog):
     self.bot = bot
 
   @app_commands.command(
-    name="set_gvg_admin_channel", description="Where to post gvg bot messages."
+    name="set_gvg_management_channel", description="Where to post gvg bot messages."
   )
-  @app_commands.describe(admin_channel="Set the GvG admin channel.")
-  async def set_gvg_admin_channel(
-    self, interaction: discord.Interaction, admin_channel: discord.TextChannel
+  @app_commands.describe(management_channel="Set the GvG management channel.")
+  async def set_gvg_management_channel(
+    self, interaction: discord.Interaction, management_channel: discord.TextChannel
   ):
     c_config = ChannelConfig(
-      channel_id=admin_channel.id, guild_id=admin_channel.guild.id
+      channel_id=management_channel.id, guild_id=management_channel.guild.id
     )
 
     # Update DB
@@ -65,13 +67,13 @@ class Configure(commands.Cog):
         selected_post=signup_config.selected_post,
         gvg_roles=signup_config.gvg_roles,
         gvg_reacts=signup_config.gvg_reacts,
-        admin_channel=c_config,
+        management_channel=c_config,
       )
 
       signup_config = update_signup_config(session, signup_config)
 
     await interaction.response.send_message(
-      f"Admin channel set to: {admin_channel}", ephemeral=True
+      f"Management channel set to: {management_channel}", ephemeral=True
     )
 
   @app_commands.command(
@@ -105,7 +107,7 @@ class Configure(commands.Cog):
     with get_session_context() as session:
       signup_config: SignupConfig = get_signup_config(session)
       signup_config = SignupConfig(
-        admin_channel=signup_config.admin_channel,
+        management_channel=signup_config.management_channel,
         selected_post=signup_config.selected_post,
         gvg_reacts=signup_config.gvg_reacts,
         gvg_roles=view.role_ids,
@@ -114,14 +116,20 @@ class Configure(commands.Cog):
       signup_config = update_signup_config(session, signup_config)
 
     # Confirm update to user
-    admin_channel = await hydrate_channel(self.bot, signup_config.admin_channel)
-    if admin_channel:
-      await admin_channel.send(
-        f"Updated! Tracking {len(view.role_ids)} roles.",
+    management_channel = await hydrate_channel(
+      self.bot, signup_config.management_channel
+    )
+    all_role_strs = " ".join([f"<@&{r_id}>" for r_id in view.role_ids])
+    if management_channel:
+      no_pings = discord.AllowedMentions(users=False, roles=False, everyone=False)
+
+      await management_channel.send(
+        f"Updated! Tracking {len(view.role_ids)} roles: {all_role_strs}",
+        allowed_mentions=no_pings,
       )
     else:
       await interaction.followup.send(
-        f"Updated! Tracking {len(view.role_ids)} roles.", ephemeral=True
+        f"Updated! Tracking {len(view.role_ids)} roles: {all_role_strs}", ephemeral=True
       )
 
   @app_commands.command(name="set_gvg_reactions")
@@ -130,22 +138,24 @@ class Configure(commands.Cog):
     with get_session_context() as session:
       signup_config: SignupConfig = get_signup_config(session)
 
-    admin_channel = await hydrate_channel(self.bot, signup_config.admin_channel)
-    if admin_channel is None:
+    management_channel = await hydrate_channel(
+      self.bot, signup_config.management_channel
+    )
+    if management_channel is None:
       await interaction.response.send_message(
-        "Admin channel required to be specified to add GvG reactions. Use /set_gvg_admin_channel.",
+        "Management channel required to be specified to add GvG reactions. Use /set_gvg_management_channel.",
         ephemeral=True,
       )
       return
 
-    if interaction.channel != admin_channel:
+    if interaction.channel != management_channel:
       await interaction.response.send_message(
-        f"GvG reactions setup must be done in admin channel: {admin_channel.name}.",
+        f"GvG reactions setup must be done in management channel: {management_channel.name}.",
         ephemeral=True,
       )
       return
 
-    canvas = await admin_channel.send(
+    canvas = await management_channel.send(
       f"**Setup Canvas for {interaction.user.display_name}**\n"
       "Please add all GvG emojis you want to use as reactions to *this* message."
     )
@@ -170,7 +180,7 @@ class Configure(commands.Cog):
     with get_session_context() as session:
       signup_config: SignupConfig = get_signup_config(session)
       signup_config = SignupConfig(
-        admin_channel=signup_config.admin_channel,
+        management_channel=signup_config.management_channel,
         selected_post=signup_config.selected_post,
         gvg_roles=signup_config.gvg_roles,
         gvg_reacts=list(reactions),
@@ -178,7 +188,9 @@ class Configure(commands.Cog):
       signup_config = update_signup_config(session, signup_config)
 
     # Confirm update to user
-    await admin_channel.send(f"Updated! GvG reactions set: {', '.join(reactions)}.")
+    await management_channel.send(
+      f"Updated! GvG reactions set: {', '.join(reactions)}."
+    )
 
   @app_commands.command(
     name="peak_gvg_config", description="Peak current GvG configuration."
@@ -194,25 +206,27 @@ class Configure(commands.Cog):
 
   @app_commands.command(
     name="post_gvg_config",
-    description="Post current GvG configuration to admin channel.",
+    description="Post current GvG configuration to management channel.",
   )
   async def post_gvg_config(self, interaction: discord.Interaction):
-    """Post the config in the admin channel."""
+    """Post the config in the management channel."""
     # Get the config from DB
     with get_session_context() as session:
       signup_config: SignupConfig = get_signup_config(session)
 
-    admin_channel = await hydrate_channel(self.bot, signup_config.admin_channel)
-    if not admin_channel:
+    management_channel = await hydrate_channel(
+      self.bot, signup_config.management_channel
+    )
+    if not management_channel:
       await interaction.response.send_message(
-        "Admin channel required to be specified to add GvG reactions. Use /set_gvg_admin_channel.",
+        "Management channel required to be specified to add GvG reactions. Use /set_gvg_management_channel.",
         ephemeral=True,
       )
       return
 
     summary_text = await get_gvg_status_str(signup_config)
     await interaction.response.send_message(summary_text, ephemeral=True)
-    await admin_channel.send(summary_text)
+    await management_channel.send(summary_text)
 
 
 async def setup(bot: commands.Bot):

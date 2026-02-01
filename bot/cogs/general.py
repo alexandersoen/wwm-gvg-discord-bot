@@ -17,7 +17,7 @@ class General(commands.Cog):
   )
   @app_commands.describe(target="The member you want to look up.")
   async def peak_role(self, interaction: discord.Interaction, target: discord.Member):
-    """Post the config in the admin channel."""
+    """Peak the role of a member."""
     with get_session_context() as session:
       signup_config: SignupConfig = get_signup_config(session)
 
