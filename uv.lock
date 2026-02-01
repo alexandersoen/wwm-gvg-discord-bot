@@ -760,6 +760,15 @@ wheels = [
 ]
 
 [[package]]
+name = "wcwidth"
+version = "0.5.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/62/a7c072fbfefb2980a00f99ca994279cb9ecf310cb2e6b2a4d2a28fe192b3/wcwidth-0.5.3.tar.gz", hash = "sha256:53123b7af053c74e9fe2e92ac810301f6139e64379031f7124574212fb3b4091", size = 157587 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/c1/d73f12f8cdb1891334a2ccf7389eed244d3941e74d80dd220badb937f3fb/wcwidth-0.5.3-py3-none-any.whl", hash = "sha256:d584eff31cd4753e1e5ff6c12e1edfdb324c995713f75d26c29807bb84bf649e", size = 92981 },
+]
+
+[[package]]
 name = "wwm-gvg-discord-bot"
 version = "0.1.0"
 source = { virtual = "." }
@@ -769,6 +778,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "sqlmodel" },
     { name = "tabulate" },
+    { name = "wcwidth" },
 ]
 
 [package.metadata]
@@ -778,6 +788,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "sqlmodel", specifier = ">=0.0.31" },
     { name = "tabulate", specifier = ">=0.9.0" },
+    { name = "wcwidth", specifier = ">=0.5.3" },
 ]
 
 [[package]]

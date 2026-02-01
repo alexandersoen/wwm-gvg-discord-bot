@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from tabulate import tabulate
+from wcwidth import wcswidth, wcwidth
 
 from bot.cogs.ui.autocomplete import emoji_autocomplete
 from bot.cogs.ui.embeds import forward_as_embed
@@ -13,7 +14,42 @@ from services.config import get_signup_config, update_signup_config
 from services.discord_bus import hydrate_channel, hydrate_message
 
 
-ROLE_NAME_STR_SIZE = 10
+ROLE_NAME_STR_SIZE = 6
+MAX_DISPLAY_NAME_LEN = 10
+
+
+def pad_wide_name(name: str, width: int) -> str:
+  visual_len = wcswidth(name)
+  if visual_len < 0:
+    visual_len = len(name)
+
+  padding_needed = width - visual_len
+  return name + " " * max(0, padding_needed)
+
+
+def format_name_for_table(name: str, max_width: int) -> str:
+  current_width = 0
+  truncated_name = ""
+
+  # Truncate based on visual width
+  for char in name:
+    width = wcwidth(char)
+    # Handle non-printable or zero-width characters
+    char_width = max(0, width)
+
+    if (
+      current_width + char_width > max_width - 1
+    ):  # Leave 1 space for an ellipsis if you like
+      truncated_name += "…"
+      current_width += 1
+      break
+
+    truncated_name += char
+    current_width += char_width
+
+  # Pad the remaining space with standard spaces
+  padding = " " * (max_width - current_width)
+  return truncated_name + padding
 
 
 async def get_react_data(
@@ -58,7 +94,9 @@ async def get_overview_table_str(
     list(members), key=lambda m: (role_weights(m), m.display_name.lower())
   )
   for member in sorted_members:
-    row = [member.display_name[:15]]
+    padded_name = format_name_for_table(member.display_name, MAX_DISPLAY_NAME_LEN)
+
+    row = [padded_name]
 
     member_role_ids = [r.id for r in member.roles]
     for r_id in gvg_role_ids:
@@ -121,7 +159,9 @@ async def get_role_list_str(
     m_str = member.mention
     other_gvg_roles = [r_id for r_id in m_role_ids if r_id != role_id]
     if other_gvg_roles:
-      other_str = f" (other GvG roles: {' '.join([f'<@&{r_id}>' for r_id in other_gvg_roles])})"
+      other_str = (
+        f" (other GvG roles: {' '.join([f'<@&{r_id}>' for r_id in other_gvg_roles])})"
+      )
       m_str = m_str + other_str
 
     member_str_list.append(m_str)
@@ -270,7 +310,10 @@ class GvGSignup(commands.Cog):
       guild, filtered_members, signup_config.gvg_roles
     )
 
-    output_str = "\n".join([header_str, summary_str, overview_str])
+    # TODO(alexandersoen): This is kinda annoying due to 2000 char limit :/
+    _ = summary_str
+    # output_str = "\n".join([header_str, summary_str, overview_str])
+    output_str = "\n".join([header_str, overview_str])
 
     no_pings = discord.AllowedMentions(users=False, roles=False, everyone=False)
 
@@ -326,7 +369,7 @@ class GvGSignup(commands.Cog):
       return
 
     query_count = len(role_list_str)
-    header_str = f"### Found {query_count} members with {setting_str}: "
+    header_str = f"### Found {query_count} signed up members with {setting_str}: "
     res_str = "\n".join(role_list_str)
     output_str = "\n".join([header_str, res_str])
 
