@@ -132,7 +132,10 @@ class Configure(commands.Cog):
         f"Updated! Tracking {len(view.role_ids)} roles: {all_role_strs}", ephemeral=True
       )
 
-  @app_commands.command(name="set_gvg_reactions")
+  @app_commands.command(
+    name="set_gvg_reactions",
+    description="Create temporary post to add specify GvG reactions.",
+  )
   async def set_gvg_reactions(self, interaction: discord.Interaction) -> None:
     """Set GvG reactions."""
     with get_session_context() as session:
@@ -169,12 +172,6 @@ class Configure(commands.Cog):
 
     await view.wait()
     reactions = view.result
-
-    if len(reactions) == 0:
-      await interaction.followup.send(
-        "No reactions selected. Exiting.",
-        ephemeral=True,
-      )
 
     # Update DB
     with get_session_context() as session:
@@ -227,6 +224,53 @@ class Configure(commands.Cog):
     summary_text = await get_gvg_status_str(signup_config)
     await interaction.response.send_message(summary_text, ephemeral=True)
     await management_channel.send(summary_text)
+
+  @app_commands.command(
+    name="add_gvg_reaction_str", description="Manually add a GvG react string."
+  )
+  @app_commands.describe(react_str="React string to add.")
+  async def add_gvg_reaction_str(
+    self, interaction: discord.Interaction, react_str: str
+  ) -> None:
+    with get_session_context() as session:
+      signup_config: SignupConfig = get_signup_config(session)
+
+    management_channel = await hydrate_channel(
+      self.bot, signup_config.management_channel
+    )
+    if management_channel is None:
+      await interaction.response.send_message(
+        "Management channel required to be specified to add GvG reactions. Use /set_gvg_management_channel.",
+        ephemeral=True,
+      )
+      return
+
+    if interaction.channel != management_channel:
+      await interaction.response.send_message(
+        f"GvG reactions setup must be done in management channel: {management_channel.name}.",
+        ephemeral=True,
+      )
+      return
+
+    signup_config.gvg_reacts.append(react_str)
+    reactions = signup_config.gvg_reacts
+
+    # Update DB
+    with get_session_context() as session:
+      signup_config: SignupConfig = get_signup_config(session)
+      signup_config = SignupConfig(
+        management_channel=signup_config.management_channel,
+        selected_post=signup_config.selected_post,
+        gvg_roles=signup_config.gvg_roles,
+        gvg_reacts=reactions,
+      )
+      signup_config = update_signup_config(session, signup_config)
+
+    # Confirm update to user
+    await interaction.response.send_message("Added reaction.", ephemeral=True)
+    await management_channel.send(
+      f"Updated! GvG reactions set: {', '.join(reactions)}."
+    )
 
 
 async def setup(bot: commands.Bot):

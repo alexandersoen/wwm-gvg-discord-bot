@@ -20,6 +20,7 @@ async def emoji_autocomplete(
     return []
 
   emojis = signup_config.gvg_reacts
+  print(emojis)
   autocomplete_list = []
   for e in emojis:
     # Splits '<:tank:12345>' into ['', 'tank', '12345>']

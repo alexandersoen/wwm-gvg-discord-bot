@@ -278,11 +278,11 @@ class GvGSignup(commands.Cog):
     description="Summary of signups.",
   )
   @app_commands.describe(
-    emoji_choice="Filter signup by emoji (preview may look different than actual emoji)."
+    react_filter="Filter signup by react (preview may look different than actual emoji)."
   )
-  @app_commands.autocomplete(emoji_choice=emoji_autocomplete)
+  @app_commands.autocomplete(react_filter=emoji_autocomplete)
   async def signup_summary(
-    self, interaction: discord.Interaction, emoji_choice: str | None = None
+    self, interaction: discord.Interaction, react_filter: str | None = None
   ):
     """Print out signup summary."""
     await interaction.response.defer(ephemeral=True, thinking=False)
@@ -297,18 +297,20 @@ class GvGSignup(commands.Cog):
 
     data = await self.get_cached_react_data(guild, signup_post)
 
-    if emoji_choice is None:
+    if react_filter is None:
       filtered_members = set().union(*data.values())
     else:
-      filtered_members = data[emoji_choice]
+      filtered_members = data[react_filter]
 
-    header_str = f"## Signup Summary for {emoji_choice}"
+    header_str = "## Signup Summary" + (f" for {react_filter}" if react_filter else "")
     summary_str = await get_summary_table_str(
       guild, filtered_members, signup_config.gvg_roles
     )
     overview_str = await get_overview_table_str(
       guild, filtered_members, signup_config.gvg_roles
     )
+
+    print(react_filter)
 
     # TODO(alexandersoen): This is kinda annoying due to 2000 char limit :/
     _ = summary_str
@@ -326,14 +328,14 @@ class GvGSignup(commands.Cog):
   )
   @app_commands.describe(target_role="The role to check.")
   @app_commands.describe(
-    emoji_choice="Filter signup by emoji (preview may look different than actual emoji)."
+    react_filter="Filter signup by react (preview may look different than actual emoji)."
   )
-  @app_commands.autocomplete(emoji_choice=emoji_autocomplete)
+  @app_commands.autocomplete(react_filter=emoji_autocomplete)
   async def signup_by_roles(
     self,
     interaction: discord.Interaction,
     target_role: discord.Role,
-    emoji_choice: str | None = None,
+    react_filter: str | None = None,
   ) -> None:
     """Query member who have signed up by their roles."""
     await interaction.response.defer(ephemeral=True, thinking=False)
@@ -347,10 +349,10 @@ class GvGSignup(commands.Cog):
     assert guild
 
     data = await self.get_cached_react_data(guild, signup_post)
-    if emoji_choice is None:
+    if react_filter is None:
       filtered_members = set().union(*data.values())
     else:
-      filtered_members = data[emoji_choice]
+      filtered_members = data[react_filter]
 
     role_list_str = await get_role_list_str(
       filtered_members, target_role.id, signup_config.gvg_roles
@@ -359,8 +361,8 @@ class GvGSignup(commands.Cog):
     no_pings = discord.AllowedMentions(users=False, roles=False, everyone=False)
 
     setting_str = f"role {target_role.mention}"
-    if emoji_choice:
-      setting_str = setting_str + f" and react {emoji_choice}"
+    if react_filter:
+      setting_str = setting_str + f" and react {react_filter}"
 
     if not role_list_str:
       await management_channel.send(
