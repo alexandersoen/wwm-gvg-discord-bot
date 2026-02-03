@@ -32,3 +32,5 @@ class Bot(commands.Bot):
   async def on_ready(self):
     assert self.user is not None
     print(f"Logged in as {self.user} (ID: {self.user.id})")
+
+bot = Bot()

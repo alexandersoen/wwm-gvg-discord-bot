@@ -1,0 +1,49 @@
+{% for member in roster %}
+<tr class="border-b border-gray-800/50 hover:bg-gray-800/20 group">
+  <td class="p-4 sticky left-0 bg-gray-900 group-hover:bg-gray-800/20 z-10">
+    <div class="flex items-center gap-3">
+      <img src="{{ member.avatar_url }}" class="w-8 h-8 rounded-full border border-gray-700">
+      <span class="font-medium text-gray-200">{{ member.display_name }}</span>
+    </div>
+  </td>
+
+  <td class="w-10 px-1 bg-gray-900/40 border-r border-gray-800/50 hover:bg-gray-800/20 text-center">
+    <button type="button" onclick="RosterManager.resetRow('member-row-{{ member.id }}')"
+      class="text-gray-600 hover:text-red-400 transition-colors p-1" title="Reset Row">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mx-auto" fill="none" viewBox="0 0 24 24"
+        stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+    </button>
+  </td>
+
+  {% for role in all_gvg_roles %}
+  <td class="p-4 text-center">
+    <div class="inline-block relative">
+      {% if role.id in member.role_ids %}
+      <input type="hidden" name="member_{{ member.id }}_role_{{ role.id }}" value="0"
+        class="member-row-{{ member.id }}">
+
+      <button type="button" onclick="RosterManager.cycleValue(this, {{ max_num_groups }})" class="w-10 h-10 rounded-lg border-2 border-gray-700 bg-gray-950 
+                           flex items-center justify-center font-bold transition-all
+                           text-gray-400 hover:border-blue-500 hover:text-blue-400
+                           data-[active=true]:border-blue-500 data-[active=true]:bg-blue-900/30 data-[active=true]:text-blue-400
+                           disabled:opacity-10 disabled:cursor-not-allowed">
+        -
+      </button>
+      {% else %}
+      <div class="w-10 h-10 flex items-center justify-center text-gray-800"
+        title="Member does not have the '{{ role.name }}' role in Discord">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd"
+            d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+            clip-rule="evenodd" />
+        </svg>
+      </div>
+      {% endif %}
+    </div>
+  </td>
+  {% endfor %}
+</tr>
+{% endfor %}

@@ -1,4 +1,3 @@
-from collections import defaultdict
 import time
 import discord
 from discord import app_commands
@@ -11,7 +10,8 @@ from bot.cogs.ui.embeds import forward_as_embed
 from core.database import get_session_context
 from core.models import ChannelConfig, MessageConfig, SignupConfig
 from services.config import get_signup_config, update_signup_config
-from services.discord_bus import hydrate_channel, hydrate_message
+from services.discord_bus import hydrate_channel
+from services.signup_service import get_and_hydrate_signup, get_react_data
 
 
 ROLE_NAME_STR_SIZE = 6
@@ -52,34 +52,14 @@ def format_name_for_table(name: str, max_width: int) -> str:
   return truncated_name + padding
 
 
-async def get_react_data(
-  guild: discord.Guild, message: discord.Message
-) -> dict[str, set[discord.Member]]:
-  """Get react data from reacts to user ids."""
-  data = defaultdict(set)
-
-  for reaction in message.reactions:
-    emoji_str = str(reaction.emoji)
-
-    async for user in reaction.users():
-      if user.bot:
-        continue
-
-      m = guild.get_member(user.id) or await guild.fetch_member(user.id)
-      data[emoji_str].add(m)
-
-  return data
-
-
 async def get_overview_table_str(
-  guild: discord.Guild, members: set[discord.Member], gvg_role_ids: list[int]
+  members: set[discord.Member], gvg_roles: list[discord.Role]
 ) -> str:
   """A overview table of signups (each role highlighted)."""
   role_objects = []
   headers = ["User"]
 
-  for r_id in gvg_role_ids:
-    role = guild.get_role(r_id)
+  for role in gvg_roles:
     name = role.name if role else "???"
     role_objects.append(role)
     headers.append(name[:ROLE_NAME_STR_SIZE].upper())
@@ -87,8 +67,7 @@ async def get_overview_table_str(
   table_data = []
 
   def role_weights(member: discord.Member):
-    m_roles = {r.id for r in member.roles}
-    return tuple(r_id not in m_roles for r_id in gvg_role_ids)
+    return tuple(role not in member.roles for role in gvg_roles)
 
   sorted_members = sorted(
     list(members), key=lambda m: (role_weights(m), m.display_name.lower())
@@ -98,14 +77,13 @@ async def get_overview_table_str(
 
     row = [padded_name]
 
-    member_role_ids = [r.id for r in member.roles]
-    for r_id in gvg_role_ids:
-      row.append("✅" if r_id in member_role_ids else " ")
+    for role in gvg_roles:
+      row.append("✅" if role in member.roles else " ")
 
     table_data.append(row)
 
   table_str = tabulate(table_data, headers=headers, tablefmt="simple")
-  role_mentions = " ".join([f"<@&{r_id}>" for r_id in gvg_role_ids])
+  role_mentions = " ".join([r.mention for r in gvg_roles])
   return f"### GvG Roster Overview\n```\n{table_str}\n```\n**Roles:** {role_mentions}"
 
 
@@ -113,6 +91,8 @@ async def get_summary_table_str(
   guild: discord.Guild, members: set[discord.Member], gvg_role_ids: list[int]
 ) -> str:
   """Summary table of counts."""
+
+  # TODO: Need to change `gvg_role_ids` to `list[discord.Role]`.
 
   # Prepare Role Metadata
   role_names = []
@@ -146,12 +126,13 @@ async def get_summary_table_str(
 
 
 async def get_role_list_str(
-  members: set[discord.Member], role_id: int, gvg_role_ids: list[int]
+  members: set[discord.Member], role_id: int, gvg_roles: list[discord.Role]
 ) -> list[str]:
   """Get mention strings by filtered role."""
   member_str_list = []
+  gvg_roles_ids = [r.id for r in gvg_roles]
   for member in members:
-    m_role_ids = [r.id for r in member.roles if r.id in gvg_role_ids]
+    m_role_ids = [r.id for r in member.roles if r.id in gvg_roles_ids]
 
     if role_id not in m_role_ids:
       continue
@@ -198,36 +179,6 @@ class GvGSignup(commands.Cog):
     self._last_fetch_time = time.time()
     self._last_snapshot = data
     return data
-
-  async def get_valid_signup_info(
-    self, interaction: discord.Interaction
-  ) -> tuple[discord.Message, discord.TextChannel, SignupConfig] | None:
-    """Basically just a hydration helper."""
-    with get_session_context() as session:
-      signup_config: SignupConfig = get_signup_config(session)
-
-    management_channel = await hydrate_channel(
-      self.bot, signup_config.management_channel
-    )
-    signup_post = await hydrate_message(self.bot, signup_config.selected_post)
-
-    # Error checking on None
-    if signup_post is None:
-      await interaction.response.send_message(
-        "No post selected. Select post via"
-        "More' -> 'Apps' -> 'Signup Analyze: Select Post'",
-        ephemeral=True,
-      )
-      return
-
-    if management_channel is None:
-      await interaction.response.send_message(
-        "Management channel required. Use /set_gvg_management_channel.",
-        ephemeral=True,
-      )
-      return
-
-    return (signup_post, management_channel, signup_config)
 
   async def select_post_cb(
     self, interaction: discord.Interaction, message: discord.Message
@@ -287,15 +238,11 @@ class GvGSignup(commands.Cog):
     """Print out signup summary."""
     await interaction.response.defer(ephemeral=True, thinking=False)
 
-    signup_info = await self.get_valid_signup_info(interaction)
-    if not signup_info:
+    signup = await get_and_hydrate_signup(self.bot, interaction)
+    if not signup:
       return
 
-    signup_post, management_channel, signup_config = signup_info
-    guild = signup_post.guild
-    assert guild
-
-    data = await self.get_cached_react_data(guild, signup_post)
+    data = await self.get_cached_react_data(signup.guild, signup.post)
 
     if react_filter is None:
       filtered_members = set().union(*data.values())
@@ -303,23 +250,18 @@ class GvGSignup(commands.Cog):
       filtered_members = data[react_filter]
 
     header_str = "## Signup Summary" + (f" for {react_filter}" if react_filter else "")
-    summary_str = await get_summary_table_str(
-      guild, filtered_members, signup_config.gvg_roles
-    )
-    overview_str = await get_overview_table_str(
-      guild, filtered_members, signup_config.gvg_roles
-    )
-
-    print(react_filter)
+    # summary_str = await get_summary_table_str(
+    #   signup.guild, filtered_members, signup_config.gvg_roles
+    # )
+    overview_str = await get_overview_table_str(filtered_members, signup.roles)
 
     # TODO(alexandersoen): This is kinda annoying due to 2000 char limit :/
-    _ = summary_str
     # output_str = "\n".join([header_str, summary_str, overview_str])
     output_str = "\n".join([header_str, overview_str])
 
     no_pings = discord.AllowedMentions(users=False, roles=False, everyone=False)
 
-    await management_channel.send(output_str, allowed_mentions=no_pings)
+    await signup.management_channel.send(output_str, allowed_mentions=no_pings)
     await interaction.delete_original_response()
 
   @app_commands.command(
@@ -340,22 +282,18 @@ class GvGSignup(commands.Cog):
     """Query member who have signed up by their roles."""
     await interaction.response.defer(ephemeral=True, thinking=False)
 
-    signup_info = await self.get_valid_signup_info(interaction)
-    if not signup_info:
+    signup = await get_and_hydrate_signup(self.bot, interaction)
+    if not signup:
       return
 
-    signup_post, management_channel, signup_config = signup_info
-    guild = signup_post.guild
-    assert guild
-
-    data = await self.get_cached_react_data(guild, signup_post)
+    data = await self.get_cached_react_data(signup.guild, signup.post)
     if react_filter is None:
       filtered_members = set().union(*data.values())
     else:
       filtered_members = data[react_filter]
 
     role_list_str = await get_role_list_str(
-      filtered_members, target_role.id, signup_config.gvg_roles
+      filtered_members, target_role.id, signup.roles
     )
 
     no_pings = discord.AllowedMentions(users=False, roles=False, everyone=False)
@@ -365,7 +303,7 @@ class GvGSignup(commands.Cog):
       setting_str = setting_str + f" and react {react_filter}"
 
     if not role_list_str:
-      await management_channel.send(
+      await signup.management_channel.send(
         f"No one with {setting_str} in signup.", allowed_mentions=no_pings
       )
       return
@@ -375,7 +313,7 @@ class GvGSignup(commands.Cog):
     res_str = "\n".join(role_list_str)
     output_str = "\n".join([header_str, res_str])
 
-    await management_channel.send(output_str, allowed_mentions=no_pings)
+    await signup.management_channel.send(output_str, allowed_mentions=no_pings)
     await interaction.delete_original_response()
 
 
