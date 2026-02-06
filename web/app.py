@@ -41,7 +41,7 @@ async def view_roster(request: Request):
   gvg_roles = []
   for role in signup.roles:
     if role:
-      gvg_roles.append({"id": role.id, "name": role.name})
+      gvg_roles.append({"id": role.id, "name": role.name, "color": str(role.color)})
 
   roster = []
   for member in members:

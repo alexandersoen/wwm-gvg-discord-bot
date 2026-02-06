@@ -1,5 +1,7 @@
 # GvG Bot
 
+Bot is getting replaced with Raid-Helper. Guess this will never be complete 😭
+
 ## TODOs
 
   - [x] Make the bot be able to parse multiple reacts.
